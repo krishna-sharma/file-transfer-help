@@ -13,8 +13,14 @@
     "node": "16.x"
   },
   "scripts": {
-    "start": "node index.js",
+    "start": "node src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "main": "index.js"
+  "main": "src/index.js",
+  "dependencies": {
+    "bufferutil": "^4.0.6",
+    "express": "^4.17.2",
+    "utf-8-validate": "^5.0.8",
+    "ws": "^8.4.2"
+  }
 }
