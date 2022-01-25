@@ -1,12 +1,17 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const { Server } = require("ws");
 
 const PORT = process.env.PORT || 8000;
-const INDEX = "/index.html";
+const indexContents = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
 
-const server = express()
-  .use((req, res) => res.sendFile(INDEX, { root: __dirname }))
-  .listen(PORT, () => console.log(`Listening on ${PORT}`));
+const app = express();
+app.get("/", (req, res) => {
+  res.type(".html");
+  res.status(200).send(indexContents);
+});
+const server = app.listen(PORT, () => console.log(`Listening on ${PORT}`));
 
 const wss = new Server({ server });
 
