@@ -26,17 +26,20 @@
     <div class="limit-width center">
       <h3>File Transfer Help</h3>
     </div>
-    <div id="server-time" class="limit-width">Waiting for server...</div>
 
     <form autocomplete="off" class="limit-width spacer" id="files-upload-form" name="files-upload-form" novalidate>
       <fieldset form="files-upload-form">
-        <legend>Pick Files</legend>
+        <legend>Send Files</legend>
         <div>
           <input id="files-to-upload" multiple type="file" />
         </div>
         <div class="spacer center">
           <input type="button" value="Upload!" id="confirm-file-selection" class="fix-size" />
         </div>
+      </fieldset>
+      <fieldset form="files-upload-form" class="spacer">
+        <legend>Receive Files</legend>
+        <div>PlaceHolder</div>
       </fieldset>
     </form>
 
