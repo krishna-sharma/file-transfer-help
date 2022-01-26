@@ -47,7 +47,26 @@
         el.innerHTML = "Server time: " + event.data;
       };
 
-      const uploadData = () => {
+      const uploadContent = (fileStream, fileMeta) => {
+        const reader = fileStream.getReader();
+        const readErrorhandler = (error) => console.log(error);
+        const readHandler = ({ value, done }) => {
+          console.log("received value", value);
+          console.log("are we done here? ", done);
+
+          if (value) {
+            ws.send(value);
+          }
+
+          if (!done) {
+            reader.read().then(readHandler, readErrorhandler);
+          }
+        };
+
+        reader.read().then(readHandler, readErrorhandler);
+      };
+
+      const uploadMeta = () => {
         const filesToUpload = document.querySelector("#files-to-upload").files;
         for (let i = 0; i < filesToUpload.length; i++) {
           const currentFile = filesToUpload[i];
@@ -58,9 +77,10 @@
             lastModified: currentFile.lastModified,
           };
           ws.send(JSON.stringify(currentFileMeta));
+          if (i === 0) uploadContent(currentFile.stream(), currentFileMeta);
         }
       };
-      document.querySelector("#confirm-file-selection").addEventListener("click", uploadData);
+      document.querySelector("#confirm-file-selection").addEventListener("click", uploadMeta);
     </script>
   </body>
 </html>
