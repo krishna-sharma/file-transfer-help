@@ -4,6 +4,22 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+    <style>
+      .limit-width {
+        margin: auto;
+        max-width: 360px;
+      }
+      .spacer {
+        margin-top: 10px;
+      }
+      .center {
+        text-align: center;
+      }
+      .fix-size {
+        width: 100px;
+      }
+    </style>
+
     <script>
       let HOST = location.origin.replace(/^http/, "ws");
       let ws = new WebSocket(HOST);
@@ -18,7 +34,21 @@
     <title>File Transfer Help</title>
   </head>
   <body>
-    <h1>File Transfer Help</h1>
-    <p id="server-time"></p>
+    <div class="limit-width center">
+      <h3>File Transfer Help</h3>
+    </div>
+    <div id="server-time" class="limit-width">Waiting for server...</div>
+
+    <form autocomplete="off" class="limit-width spacer" id="files-upload-form" name="files-upload-form" novalidate>
+      <fieldset form="files-upload-form">
+        <legend>Pick Files</legend>
+        <div>
+          <input id="files-to-upload" multiple type="file" />
+        </div>
+        <div class="spacer center">
+          <input type="button" value="Upload!" class="fix-size" />
+        </div>
+      </fieldset>
+    </form>
   </body>
 </html>

@@ -21,7 +21,8 @@ wss.on("connection", (ws) => {
 });
 
 setInterval(() => {
+  const currentTime = new Date().toISOString().replace("T", " ").slice(0, -5);
   wss.clients.forEach((client) => {
-    client.send(new Date().toISOString());
+    client.send(currentTime);
   });
 }, 1000);
