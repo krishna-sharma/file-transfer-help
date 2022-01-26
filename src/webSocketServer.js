@@ -17,6 +17,9 @@ const connection = (clientId, ws) => {
 
 const close = (clientId) => {
   deleteClient(clientId);
+  doOnAllClients((client) => {
+    client.webSocket.send(filesListForClient(client.clientId), { binary: false });
+  });
 };
 
 const message = (clientId, data, isBinary) => {

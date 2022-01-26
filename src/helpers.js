@@ -12,8 +12,22 @@ exports.addNewClient = (clientId, ws) => {
 };
 
 exports.deleteClient = (clientId) => {
-  // delete file entries from clientId in files
-  // delete file entries from clientId in other clients
+  const filesOfClient = clients[clientId].files;
+
+  // delete file entries of clientId in other clients
+  Object.keys(clients).forEach((otherClientId) => {
+    if (otherClientId !== clientId) {
+      const oldFiles = clients[otherClientId].files;
+      clients[otherClientId].files = oldFiles.filter((oldFile) => !filesOfClient.includes(oldFile));
+    }
+  });
+
+  // delete file entries of clientId in files
+  filesOfClient.forEach((fileOfClient) => {
+    delete files[fileOfClient];
+  });
+
+  // delete clientId entry from clients
   delete clients[clientId];
 };
 
