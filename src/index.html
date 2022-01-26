@@ -58,7 +58,6 @@
             lastModified: currentFile.lastModified,
           };
           ws.send(JSON.stringify(currentFileMeta));
-          console.log(currentFileMeta);
         }
       };
       document.querySelector("#confirm-file-selection").addEventListener("click", uploadData);
