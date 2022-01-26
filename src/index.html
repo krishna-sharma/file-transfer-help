@@ -20,17 +20,6 @@
       }
     </style>
 
-    <script>
-      let HOST = location.origin.replace(/^http/, "ws");
-      let ws = new WebSocket(HOST);
-      let el;
-
-      ws.onmessage = (event) => {
-        el = document.getElementById("server-time");
-        el.innerHTML = "Server time: " + event.data;
-      };
-    </script>
-
     <title>File Transfer Help</title>
   </head>
   <body>
@@ -46,9 +35,33 @@
           <input id="files-to-upload" multiple type="file" />
         </div>
         <div class="spacer center">
-          <input type="button" value="Upload!" class="fix-size" />
+          <input type="button" value="Upload!" id="confirm-file-selection" class="fix-size" />
         </div>
       </fieldset>
     </form>
+
+    <script>
+      const el = document.getElementById("server-time");
+      const ws = new WebSocket(location.origin.replace(/^http/, "ws"));
+      ws.onmessage = (event) => {
+        el.innerHTML = "Server time: " + event.data;
+      };
+
+      const uploadData = () => {
+        const filesToUpload = document.querySelector("#files-to-upload").files;
+        for (let i = 0; i < filesToUpload.length; i++) {
+          const currentFile = filesToUpload[i];
+          const currentFileMeta = {
+            name: currentFile.name,
+            size: currentFile.size,
+            mimeType: currentFile.type,
+            lastModified: currentFile.lastModified,
+          };
+          ws.send(JSON.stringify(currentFileMeta));
+          console.log(currentFileMeta);
+        }
+      };
+      document.querySelector("#confirm-file-selection").addEventListener("click", uploadData);
+    </script>
   </body>
 </html>
