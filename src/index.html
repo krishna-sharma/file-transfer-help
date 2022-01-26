@@ -43,19 +43,23 @@
     <script>
       const el = document.getElementById("server-time");
       const ws = new WebSocket(location.origin.replace(/^http/, "ws"));
-      ws.onmessage = (event) => {
-        el.innerHTML = "Server time: " + event.data;
-      };
+      // ws.onmessage = (event) => {
+      //   el.innerHTML = "Server time: " + event.data;
+      // };
 
       const uploadContent = (fileStream, fileMeta) => {
         const reader = fileStream.getReader();
         const readErrorhandler = (error) => console.log(error);
         const readHandler = ({ value, done }) => {
-          console.log("received value", value);
+          console.log("received value", value.byteLength);
           console.log("are we done here? ", done);
 
           if (value) {
-            ws.send(value);
+            const len = value.byteLength;
+            const increment = 1024 * 7;
+            for (let i = 0; i < value.byteLength; i += increment) {
+              ws.send(value.subarray(i, i + increment));
+            }
           }
 
           if (!done) {
