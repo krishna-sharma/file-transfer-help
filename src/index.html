@@ -7,7 +7,7 @@
     <style>
       .limit-width {
         margin: auto;
-        max-width: 360px;
+        max-width: 800px;
       }
       .spacer {
         margin-top: 10px;
@@ -17,6 +17,16 @@
       }
       .fix-size {
         width: 100px;
+      }
+      #files-to-download {
+        position: relative;
+      }
+      .file {
+        width: 100%;
+      }
+      .file tbody tr:hover {
+        cursor: pointer;
+        background: #dddddd;
       }
     </style>
 
@@ -39,24 +49,57 @@
       </fieldset>
       <fieldset form="files-upload-form" class="spacer">
         <legend>Receive Files</legend>
-        <div>PlaceHolder</div>
+        <div id="files-to-download"></div>
       </fieldset>
     </form>
 
     <script>
-      const el = document.getElementById("server-time");
+      const el = document.getElementById("files-to-download");
       const ws = new WebSocket(location.origin.replace(/^http/, "ws"));
-      // ws.onmessage = (event) => {
-      //   el.innerHTML = "Server time: " + event.data;
-      // };
+
+      const getSize = (sizeInBytes) => {
+        if (sizeInBytes < 1024) return `${sizeInBytes} B`;
+        else if (sizeInBytes < 1024 * 1024) return `${Math.round((sizeInBytes / 1024) * 10) / 10} KB`;
+        else if (sizeInBytes < 1024 * 1024 * 1024) return `${Math.round((sizeInBytes / (1024 * 1024)) * 10) / 10} MB`;
+        else return `${Math.round((sizeInBytes / (1024 * 1024 * 1024)) * 10) / 10} GB`;
+      };
+
+      ws.onmessage = (event) => {
+        const availableFiles = JSON.parse(event.data);
+        const tableRows = availableFiles.map((availableFile) => {
+          let modifiedDate = new Date(availableFile.lastModified);
+          modifiedDate = new Date(modifiedDate.getTime() - modifiedDate.getTimezoneOffset() * 60000);
+          modifiedDate = modifiedDate.toISOString().replace("T", " ").slice(0, -5);
+          return `
+            <tr>
+              <td>${availableFile.name}</td>
+              <td class="center">${getSize(availableFile.size)}</td>
+              <td class="center">${modifiedDate}</td>
+              <td class="center">${availableFile.mimeType}</td>
+            </tr>
+          `;
+        });
+        el.innerHTML = `
+          <table class="file">
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>Last Modified</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows.join("")}
+            </tbody>
+          </table>
+        `;
+      };
 
       const uploadContent = (fileStream, fileMeta) => {
         const reader = fileStream.getReader();
         const readErrorhandler = (error) => console.log(error);
         const readHandler = ({ value, done }) => {
-          console.log("received value", value.byteLength);
-          console.log("are we done here? ", done);
-
           if (value) {
             const len = value.byteLength;
             const increment = 1024 * 7;
@@ -84,9 +127,10 @@
             lastModified: currentFile.lastModified,
           };
           ws.send(JSON.stringify(currentFileMeta));
-          if (i === 0) uploadContent(currentFile.stream(), currentFileMeta);
+          // if (i === 0) uploadContent(currentFile.stream(), currentFileMeta);
         }
       };
+
       document.querySelector("#confirm-file-selection").addEventListener("click", uploadMeta);
     </script>
   </body>

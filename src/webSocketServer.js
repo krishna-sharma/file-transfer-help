@@ -27,6 +27,8 @@ const message = (clientId, data, isBinary) => {
     // console.log("Received binary data of length", Buffer.byteLength(data, "utf-8"));
   } else {
     const currentFileId = `client-${lastUsedFileId}`;
+    // delete old file entries from clientId in files
+    // delete old file entries from clientId in other clients
     addFileToList(files, data.toString("utf-8"), currentFileId, clientId);
     addFileToClient(clients, clientId, currentFileId);
     lastUsedFileId += 1;
