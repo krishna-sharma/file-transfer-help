@@ -50,5 +50,5 @@ exports.getNextClientId = () => {
 
 const getNextFileId = () => {
   lastUsedFileId += 1;
-  return `client-${lastUsedFileId}`;
+  return `file-${lastUsedFileId}`;
 };

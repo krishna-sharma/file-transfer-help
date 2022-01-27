@@ -62,35 +62,45 @@
       };
 
       ws.onmessage = (event) => {
-        const availableFiles = JSON.parse(event.data);
-        const tableRows = availableFiles.map((availableFile) => {
-          let modifiedDate = new Date(availableFile.lastModified);
-          modifiedDate = new Date(modifiedDate.getTime() - modifiedDate.getTimezoneOffset() * 60000);
-          modifiedDate = modifiedDate.toISOString().replace("T", " ").slice(0, -5);
-          return `
-            <tr>
-              <td>${availableFile.name}</td>
-              <td class="center">${getSize(availableFile.size)}</td>
-              <td class="center">${modifiedDate}</td>
-              <td class="center">${availableFile.mimeType}</td>
-            </tr>
-          `;
-        });
-        el.innerHTML = `
-          <table class="file">
-            <thead>
-              <tr>
-                <th>Filename</th>
-                <th>Size</th>
-                <th>Last Modified</th>
-                <th>Type</th>
+        try {
+          const availableFiles = JSON.parse(event.data);
+          const tableRows = availableFiles.map((availableFile) => {
+            let modifiedDate = new Date(availableFile.lastModified);
+            modifiedDate = new Date(modifiedDate.getTime() - modifiedDate.getTimezoneOffset() * 60000);
+            modifiedDate = modifiedDate.toISOString().replace("T", " ").slice(0, -5);
+            return `
+              <tr class="${availableFile.clientId} ${availableFile.fileId}">
+                <td>${availableFile.name}</td>
+                <td class="center">${getSize(availableFile.size)}</td>
+                <td class="center">${modifiedDate}</td>
+                <td class="center">${availableFile.mimeType}</td>
               </tr>
-            </thead>
-            <tbody>
-              ${tableRows.join("")}
-            </tbody>
-          </table>
-        `;
+            `;
+          });
+          el.innerHTML = `
+            <table class="file">
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Size</th>
+                  <th>Last Modified</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows.join("")}
+              </tbody>
+            </table>
+          `;
+          const filesAvailable = document.querySelectorAll("#files-to-download > table > tbody > tr");
+          filesAvailable.forEach((fileRow) => {
+            fileRow.onclick = (event) => {
+              console.log(event.target.classList);
+            };
+          });
+        } catch (error) {
+          console.log("error caught...", error, event);
+        }
       };
 
       const uploadContent = (fileStream, fileMeta) => {
