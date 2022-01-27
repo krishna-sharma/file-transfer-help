@@ -40,11 +40,8 @@
     <form autocomplete="off" class="limit-width spacer" id="files-upload-form" name="files-upload-form" novalidate>
       <fieldset form="files-upload-form">
         <legend>Send Files</legend>
-        <div>
+        <div class="center">
           <input id="files-to-upload" multiple type="file" />
-        </div>
-        <div class="spacer center">
-          <input type="button" value="Upload!" id="confirm-file-selection" class="fix-size" />
         </div>
       </fieldset>
       <fieldset form="files-upload-form" class="spacer">
@@ -117,21 +114,24 @@
       };
 
       const uploadMeta = () => {
+        ws.send(JSON.stringify({ action: "CLEAR", payload: null }));
         const filesToUpload = document.querySelector("#files-to-upload").files;
         for (let i = 0; i < filesToUpload.length; i++) {
           const currentFile = filesToUpload[i];
           const currentFileMeta = {
-            name: currentFile.name,
-            size: currentFile.size,
-            mimeType: currentFile.type,
-            lastModified: currentFile.lastModified,
+            action: "ADD",
+            payload: {
+              name: currentFile.name,
+              size: currentFile.size,
+              mimeType: currentFile.type,
+              lastModified: currentFile.lastModified,
+            },
           };
           ws.send(JSON.stringify(currentFileMeta));
-          // if (i === 0) uploadContent(currentFile.stream(), currentFileMeta);
         }
       };
 
-      document.querySelector("#confirm-file-selection").addEventListener("click", uploadMeta);
+      document.querySelector("#files-to-upload").addEventListener("change", uploadMeta);
     </script>
   </body>
 </html>

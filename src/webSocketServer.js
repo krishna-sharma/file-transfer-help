@@ -1,13 +1,13 @@
 const { Server } = require("ws");
 const {
-  getNextClientid,
-  getNextFileid,
+  getNextClientId,
+  getNextFileId,
   addNewClient,
   deleteClient,
   addFileToList,
-  addFileToClient,
   filesListForClient,
   doOnAllClients,
+  clearClientFiles,
 } = require("./helpers");
 
 const connection = (clientId, ws) => {
@@ -26,11 +26,12 @@ const message = (clientId, data, isBinary) => {
   if (isBinary) {
     // console.log("Received binary data of length", Buffer.byteLength(data, "utf-8"));
   } else {
-    const fileId = getNextFileid();
-    // delete old file entries from clientId in files
-    // delete old file entries from clientId in other clients
-    addFileToList(data.toString("utf-8"), fileId, clientId);
-    addFileToClient(clientId, fileId);
+    const parsedData = JSON.parse(data.toString("utf-8"));
+    if (parsedData.action === "ADD") {
+      addFileToList(parsedData.payload, clientId);
+    } else if (parsedData.action === "CLEAR") {
+      clearClientFiles(clientId);
+    }
     doOnAllClients((client) => {
       client.webSocket.send(filesListForClient(client.clientId), { binary: false });
     });
@@ -40,7 +41,7 @@ const message = (clientId, data, isBinary) => {
 exports.startWebSocketServer = (httpServer) => {
   const wss = new Server({ server: httpServer });
   wss.on("connection", (ws) => {
-    const clientId = getNextClientid();
+    const clientId = getNextClientId();
     connection(clientId, ws);
     ws.on("close", () => close(clientId));
     ws.on("message", (data, isBinary) => message(clientId, data, isBinary));
