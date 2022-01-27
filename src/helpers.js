@@ -29,7 +29,7 @@ exports.clearClientFiles = (clientId) => {
 };
 
 exports.addFileToList = (newFileMeta, clientId) => {
-  const fileId = this.getNextFileId();
+  const fileId = getNextFileId();
   files[fileId] = {
     clientId,
     fileId,
@@ -48,7 +48,7 @@ exports.getNextClientId = () => {
   return `client-${lastUsedClientId}`;
 };
 
-exports.getNextFileId = () => {
+const getNextFileId = () => {
   lastUsedFileId += 1;
   return `client-${lastUsedFileId}`;
 };

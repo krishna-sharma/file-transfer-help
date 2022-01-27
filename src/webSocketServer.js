@@ -1,7 +1,6 @@
 const { Server } = require("ws");
 const {
   getNextClientId,
-  getNextFileId,
   addNewClient,
   deleteClient,
   addFileToList,
