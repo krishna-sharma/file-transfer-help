@@ -45,4 +45,10 @@ exports.startWebSocketServer = (httpServer) => {
     ws.on("close", () => close(clientId));
     ws.on("message", (data, isBinary) => message(clientId, data, isBinary));
   });
+
+  setInterval(() => {
+    doOnAllClients((client) => {
+      client.webSocket.send(filesListForClient(client.clientId), { binary: false });
+    });
+  }, 1000);
 };
