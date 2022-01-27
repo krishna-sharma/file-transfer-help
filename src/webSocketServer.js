@@ -7,6 +7,7 @@ const {
   filesListForClient,
   doOnAllClients,
   clearClientFiles,
+  addTransferRequest,
 } = require("./helpers");
 
 const connection = (clientId, ws) => {
@@ -30,6 +31,8 @@ const message = (clientId, data, isBinary) => {
       addFileToList(parsedData.payload, clientId);
     } else if (parsedData.action === "CLEAR") {
       clearClientFiles(clientId);
+    } else if (parsedData.action === "REQUEST") {
+      addTransferRequest(clientId, parsedData.payload);
     }
     doOnAllClients((client) => {
       client.webSocket.send(filesListForClient(client.clientId), { binary: false });
@@ -50,5 +53,5 @@ exports.startWebSocketServer = (httpServer) => {
     doOnAllClients((client) => {
       client.webSocket.send(filesListForClient(client.clientId), { binary: false });
     });
-  }, 1000);
+  }, 2000);
 };
