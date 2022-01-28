@@ -12,6 +12,14 @@ const removeFilesOfAClient = (clientId) => {
   });
 };
 
+const removeTransfersOfClient = (clientId, useDest) => {
+  Object.values(transfers).forEach((transfer) => {
+    if (transfer.sourceClientId === clientId || (useDest && transfer.destClientId === clientId)) {
+      delete transfers[transfer.transferId];
+    }
+  });
+};
+
 exports.addNewClient = (clientId, ws) => {
   clients[clientId] = {
     clientId,
@@ -22,11 +30,13 @@ exports.addNewClient = (clientId, ws) => {
 
 exports.deleteClient = (clientId) => {
   removeFilesOfAClient(clientId);
+  removeTransfersOfClient(clientId, true);
   delete clients[clientId];
 };
 
 exports.clearClientFiles = (clientId) => {
   removeFilesOfAClient(clientId);
+  removeTransfersOfClient(clientId, false);
   clients[clientId].files = [];
 };
 
@@ -44,8 +54,8 @@ exports.addTransferRequest = (destClientId, source) => {
   const sourceClientId = source.clientId;
   const fileId = source.fileId;
   const transferId = getNextTransferId();
-  transfers[transferId] = { fileId, sourceClientId, destClientId };
-  console.log(`${transferId}: [${fileId}] from [${sourceClientId}] to [${destClientId}]`);
+  transfers[transferId] = { transferId, fileId, sourceClientId, destClientId };
+  return clients[sourceClientId];
 };
 
 exports.doOnAllClients = (cb) => Object.values(clients).map(cb);

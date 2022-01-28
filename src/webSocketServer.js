@@ -24,7 +24,7 @@ const close = (clientId) => {
 
 const message = (clientId, data, isBinary) => {
   if (isBinary) {
-    // console.log("Received binary data of length", Buffer.byteLength(data, "utf-8"));
+    console.log("Received binary data of length", Buffer.byteLength(data, "utf-8"));
   } else {
     const parsedData = JSON.parse(data.toString("utf-8"));
     if (parsedData.action === "ADD") {
@@ -32,7 +32,11 @@ const message = (clientId, data, isBinary) => {
     } else if (parsedData.action === "CLEAR") {
       clearClientFiles(clientId);
     } else if (parsedData.action === "REQUEST") {
-      addTransferRequest(clientId, parsedData.payload);
+      const sourceClient = addTransferRequest(clientId, parsedData.payload);
+      sourceClient.webSocket.send(
+        JSON.stringify({ action: "REQUEST", payload: { fileId: parsedData.payload.fileId, clientId } }),
+        { binary: false }
+      );
     }
     doOnAllClients((client) => {
       client.webSocket.send(filesListForClient(client.clientId), { binary: false });

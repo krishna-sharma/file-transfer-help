@@ -148,6 +148,8 @@
           const parsedData = JSON.parse(event.data);
           if (parsedData.action === "LIST") {
             showFileList(parsedData.payload);
+          } else {
+            console.log("received message...", parsedData);
           }
         } catch (error) {
           console.log("error caught...", error, event);
