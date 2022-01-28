@@ -48,11 +48,17 @@
         <legend>Receive Files</legend>
         <div id="files-to-download"></div>
       </fieldset>
+      <fieldset form="files-upload-form" class="spacer">
+        <legend>Transfers</legend>
+        <div id="file-transfers"></div>
+      </fieldset>
     </form>
 
     <script>
       const el = document.getElementById("files-to-download");
       const ws = new WebSocket(location.origin.replace(/^http/, "ws"));
+      const transfersContainer = document.querySelector("#file-transfers");
+      const transfers = [];
 
       const getSize = (sizeInBytes) => {
         if (sizeInBytes < 1024) return `${sizeInBytes} B`;
@@ -90,22 +96,17 @@
               </tbody>
             </table>
           `;
+        // TODO: remove transfers that are no longer available
         const filesAvailable = document.querySelectorAll("#files-to-download > table > tbody > tr");
         filesAvailable.forEach((fileRow) => {
           fileRow.onclick = function (event) {
             const [clientId, fileId] = this.classList;
-            console.log(clientId, fileId);
-            ws.send(
-              JSON.stringify({
-                action: "REQUEST",
-                payload: { clientId, fileId },
-              })
-            );
+            ws.send(JSON.stringify({ action: "REQUEST", payload: { clientId, fileId } }));
           };
         });
       };
 
-      const uploadContent = (fileObj, destClientId) => {
+      const uploadContent = (fileObj, transferId) => {
         const reader = fileObj.stream().getReader();
         const readErrorhandler = (error) => console.log(error);
         const readHandler = ({ value, done }) => {
@@ -119,17 +120,20 @@
 
           if (!done) {
             reader.read().then(readHandler, readErrorhandler);
+          } else {
+            ws.send(JSON.stringify({ action: "END", payload: { transferId } }));
           }
         };
 
         reader.read().then(readHandler, readErrorhandler);
       };
 
-      const pickAndUploadFile = ({ filename, clientId }) => {
+      const pickAndUploadFile = ({ filename, transferId }) => {
         const filesToUpload = document.querySelector("#files-to-upload").files;
         for (let i = 0; i < filesToUpload.length; i++) {
           if (filesToUpload[i].name === filename) {
-            uploadContent(filesToUpload[i], clientId);
+            transfers.push({ type: "SEND", transferId, name: filename });
+            uploadContent(filesToUpload[i], transferId);
             break;
           }
         }
@@ -137,6 +141,7 @@
 
       const uploadMeta = () => {
         ws.send(JSON.stringify({ action: "CLEAR", payload: null }));
+        // TODO: remove transfers that are no longer available
         const filesToUpload = document.querySelector("#files-to-upload").files;
         for (let i = 0; i < filesToUpload.length; i++) {
           const currentFile = filesToUpload[i];
@@ -153,20 +158,76 @@
         }
       };
 
+      const receiveContent = (data) => {
+        const receiveTransfer = transfers.filter((transfer) => transfer.type === "RECEIVE")[0];
+        if (receiveTransfer) {
+          if (!receiveTransfer.response) {
+            receiveTransfer.response = new Response(
+              new ReadableStream({
+                start(controller) {
+                  receiveTransfer.controller = controller;
+                },
+              })
+            );
+            receiveTransfer.progress = 0;
+            receiveTransfer.dataChain = Promise.resolve(true);
+          }
+
+          receiveTransfer.dataChain = receiveTransfer.dataChain.then(() =>
+            data.arrayBuffer().then((arrayBuffer) => {
+              receiveTransfer.controller.enqueue(new Uint8Array(arrayBuffer));
+              receiveTransfer.progress += data.size;
+              return true;
+            })
+          );
+        }
+      };
+
       ws.onmessage = (event) => {
-        try {
+        if (typeof event.data === "string") {
           const parsedData = JSON.parse(event.data);
           if (parsedData.action === "LIST") {
             showFileList(parsedData.payload);
           } else if (parsedData.action === "REQUEST") {
             pickAndUploadFile(parsedData.payload);
-          } else {
-            console.log("received message...", parsedData);
+          } else if (parsedData.action === "START") {
+            transfers.push({ type: "RECEIVE", ...parsedData.payload });
+          } else if (parsedData.action === "END") {
+            const receiveTransfer = transfers.filter((transfer) => transfer.type === "RECEIVE")[0];
+            if (receiveTransfer && receiveTransfer.controller) {
+              receiveTransfer.dataChain.then(() => {
+                receiveTransfer.controller.close();
+                receiveTransfer.response.blob().then((binaryData) => {
+                  const blobUrl = window.URL.createObjectURL(binaryData);
+                  const link = document.createElement("a");
+                  link.href = blobUrl;
+                  link.setAttribute("download", receiveTransfer.name);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.parentNode.removeChild(link);
+                  window.URL.revokeObjectURL(blobUrl);
+                });
+                // TODO: cleanup receiveTransfer
+              });
+            }
           }
-        } catch (error) {
-          console.log("error caught...", error, event);
+        } else {
+          receiveContent(event.data);
         }
       };
+
+      setInterval(() => {
+        transfersContainer.innerHTML = transfers
+          .map((transfer) => {
+            const transferDetails = {
+              type: transfer.type,
+              transferId: transfer.transferId,
+              name: transfer.name,
+            };
+            return `<pre>${JSON.stringify(transferDetails, null, 2)}<pre>`;
+          })
+          .join("");
+      }, 1000);
 
       document.querySelector("#files-to-upload").addEventListener("change", uploadMeta);
     </script>

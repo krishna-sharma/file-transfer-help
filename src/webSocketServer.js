@@ -8,6 +8,8 @@ const {
   doOnAllClients,
   clearClientFiles,
   addTransferRequest,
+  processData,
+  endofData,
 } = require("./helpers");
 
 const connection = (clientId, ws) => {
@@ -24,7 +26,8 @@ const close = (clientId) => {
 
 const message = (clientId, data, isBinary) => {
   if (isBinary) {
-    console.log("Received binary data of length", Buffer.byteLength(data, "utf-8"));
+    const [ws, dataToForward] = processData(clientId, data);
+    ws.send(dataToForward, { binary: true });
   } else {
     const parsedData = JSON.parse(data.toString("utf-8"));
     if (parsedData.action === "ADD") {
@@ -32,11 +35,26 @@ const message = (clientId, data, isBinary) => {
     } else if (parsedData.action === "CLEAR") {
       clearClientFiles(clientId);
     } else if (parsedData.action === "REQUEST") {
-      const [sourceClient, fileDetails] = addTransferRequest(clientId, parsedData.payload);
+      const [sourceClient, destClient, fileDetails, transferId] = addTransferRequest(clientId, parsedData.payload);
+      destClient.webSocket.send(
+        JSON.stringify({
+          action: "START",
+          payload: { transferId, ...fileDetails },
+        }),
+        {
+          binary: false,
+        }
+      );
       sourceClient.webSocket.send(
-        JSON.stringify({ action: "REQUEST", payload: { filename: fileDetails.name, clientId } }),
+        JSON.stringify({
+          action: "REQUEST",
+          payload: { transferId, filename: fileDetails.name },
+        }),
         { binary: false }
       );
+    } else if (parsedData.action === "END") {
+      const [ws, dataToForward] = endofData(clientId);
+      ws.send(dataToForward, { binary: false });
     }
     doOnAllClients((client) => {
       client.webSocket.send(filesListForClient(client.clientId), { binary: false });
@@ -57,5 +75,5 @@ exports.startWebSocketServer = (httpServer) => {
     doOnAllClients((client) => {
       client.webSocket.send(filesListForClient(client.clientId), { binary: false });
     });
-  }, 2000);
+  }, 20000);
 };

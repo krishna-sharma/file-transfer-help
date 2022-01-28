@@ -55,7 +55,19 @@ exports.addTransferRequest = (destClientId, source) => {
   const fileId = source.fileId;
   const transferId = getNextTransferId();
   transfers[transferId] = { transferId, fileId, sourceClientId, destClientId };
-  return [clients[sourceClientId], files[fileId]];
+  return [clients[sourceClientId], clients[destClientId], files[fileId], transferId];
+};
+
+exports.processData = (sourceClientId, data) => {
+  const [transfer] = Object.values(transfers).filter((transfer) => transfer.sourceClientId === sourceClientId);
+  const destClient = clients[transfer.destClientId];
+  return [destClient.webSocket, data];
+};
+
+exports.endofData = (sourceClientId) => {
+  const [transfer] = Object.values(transfers).filter((transfer) => transfer.sourceClientId === sourceClientId);
+  const destClient = clients[transfer.destClientId];
+  return [destClient.webSocket, JSON.stringify({ action: "END", payload: transfer })];
 };
 
 exports.doOnAllClients = (cb) => Object.values(clients).map(cb);
