@@ -55,7 +55,7 @@ exports.addTransferRequest = (destClientId, source) => {
   const fileId = source.fileId;
   const transferId = getNextTransferId();
   transfers[transferId] = { transferId, fileId, sourceClientId, destClientId };
-  return clients[sourceClientId];
+  return [clients[sourceClientId], files[fileId]];
 };
 
 exports.doOnAllClients = (cb) => Object.values(clients).map(cb);

@@ -32,9 +32,9 @@ const message = (clientId, data, isBinary) => {
     } else if (parsedData.action === "CLEAR") {
       clearClientFiles(clientId);
     } else if (parsedData.action === "REQUEST") {
-      const sourceClient = addTransferRequest(clientId, parsedData.payload);
+      const [sourceClient, fileDetails] = addTransferRequest(clientId, parsedData.payload);
       sourceClient.webSocket.send(
-        JSON.stringify({ action: "REQUEST", payload: { fileId: parsedData.payload.fileId, clientId } }),
+        JSON.stringify({ action: "REQUEST", payload: { filename: fileDetails.name, clientId } }),
         { binary: false }
       );
     }
