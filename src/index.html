@@ -105,8 +105,8 @@
         });
       };
 
-      const uploadContent = (fileStream, fileMeta) => {
-        const reader = fileStream.getReader();
+      const uploadContent = (fileObj, destClientId) => {
+        const reader = fileObj.stream().getReader();
         const readErrorhandler = (error) => console.log(error);
         const readHandler = ({ value, done }) => {
           if (value) {
@@ -123,6 +123,16 @@
         };
 
         reader.read().then(readHandler, readErrorhandler);
+      };
+
+      const pickAndUploadFile = ({ filename, clientId }) => {
+        const filesToUpload = document.querySelector("#files-to-upload").files;
+        for (let i = 0; i < filesToUpload.length; i++) {
+          if (filesToUpload[i].name === filename) {
+            uploadContent(filesToUpload[i], clientId);
+            break;
+          }
+        }
       };
 
       const uploadMeta = () => {
@@ -148,6 +158,8 @@
           const parsedData = JSON.parse(event.data);
           if (parsedData.action === "LIST") {
             showFileList(parsedData.payload);
+          } else if (parsedData.action === "REQUEST") {
+            pickAndUploadFile(parsedData.payload);
           } else {
             console.log("received message...", parsedData);
           }
