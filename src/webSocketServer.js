@@ -10,6 +10,7 @@ const {
   addTransferRequest,
   processData,
   endofData,
+  getClientWebsocket,
 } = require("./helpers");
 
 const connection = (clientId, ws) => {
@@ -26,8 +27,18 @@ const close = (clientId) => {
 
 const message = (clientId, data, isBinary) => {
   if (isBinary) {
-    const [ws, dataToForward] = processData(clientId, data);
-    ws.send(dataToForward, { binary: true });
+    try {
+      const [ws, dataToForward] = processData(clientId, data);
+      ws.send(dataToForward, { binary: true });
+    } catch (error) {
+      getClientWebsocket(clientId).send(
+        JSON.stringify({
+          action: "SEND_FAILED",
+          payload: error.message,
+        }),
+        { binary: false }
+      );
+    }
   } else {
     const parsedData = JSON.parse(data.toString("utf-8"));
     if (parsedData.action === "ADD") {

@@ -108,7 +108,6 @@
             </tbody>
           </table>
         `;
-        // TODO: remove transfers that are no longer available
         const filesAvailable = document.querySelectorAll("#files-to-download > table > tbody > tr");
         filesAvailable.forEach((fileRow) => {
           fileRow.onclick = function (event) {
@@ -140,10 +139,6 @@
           checkBuffer();
         });
 
-      setInterval(() => {
-        console.log("ws.bufferedAmount is:", ws.bufferedAmount);
-      }, 1000);
-
       const uploadContent = (fileObj, transferId) => {
         const reader = fileObj.stream().getReader();
         const readErrorhandler = (error) => console.log(error);
@@ -157,6 +152,10 @@
             const len = value.byteLength;
             for (let i = 0; i < value.byteLength; i += increment) {
               await waitOnBuffer(increment);
+              if (sendTransfer.status === "Failed") {
+                sendTransfer.timestamp = Date.now();
+                return;
+              }
               const dataChunk = value.subarray(i, i + increment);
               sendTransfer.progress += dataChunk.byteLength;
               sendTransfer.timestamp = Date.now();
@@ -168,6 +167,10 @@
             reader.read().then(readHandler, readErrorhandler);
           } else {
             await waitOnBuffer(0);
+            if (sendTransfer.status === "Failed") {
+              sendTransfer.timestamp = Date.now();
+              return;
+            }
             sendTransfer.status = "Complete";
             sendTransfer.timestamp = Date.now();
             ws.send(JSON.stringify({ action: "END", payload: { transferId } }));
@@ -194,6 +197,7 @@
               mimeType: filesToUpload[i].type,
               lastModified: filesToUpload[i].lastModified,
             });
+            refreshTransfersList();
             uploadContent(filesToUpload[i], transferId);
             break;
           }
@@ -202,7 +206,6 @@
 
       const uploadMeta = () => {
         ws.send(JSON.stringify({ action: "CLEAR", payload: null }));
-        // TODO: remove transfers that are no longer available
         const filesToUpload = document.querySelector("#files-to-upload").files;
         for (let i = 0; i < filesToUpload.length; i++) {
           const currentFile = filesToUpload[i];
@@ -237,10 +240,12 @@
 
           receiveTransfer.dataChain = receiveTransfer.dataChain.then(() =>
             data.arrayBuffer().then((arrayBuffer) => {
-              receiveTransfer.controller.enqueue(new Uint8Array(arrayBuffer));
-              receiveTransfer.progress += data.size;
               receiveTransfer.timestamp = Date.now();
-              return true;
+              if (receiveTransfer.controller) {
+                receiveTransfer.controller.enqueue(new Uint8Array(arrayBuffer));
+                receiveTransfer.progress += data.size;
+                return true;
+              }
             })
           );
         }
@@ -263,6 +268,7 @@
               progress: 0,
               ...parsedData.payload,
             });
+            refreshTransfersList();
           } else if (parsedData.action === "END") {
             const receiveTransfer = transfers[currentReceiveTransfer];
             if (receiveTransfer && receiveTransfer.controller) {
@@ -285,13 +291,26 @@
                 });
               });
             }
+          } else if (parsedData.action === "SEND_FAILED") {
+            console.log("SEND_FAILED:", parsedData.payload);
+            const sendTransfer = transfers[currentSendTransfer];
+            sendTransfer.status = "Failed";
+          } else if (parsedData.action === "RECEIVE_FAILED") {
+            console.log("RECEIVE_FAILED:", parsedData.payload);
+            const receiveTransfer = transfers[currentReceiveTransfer];
+            receiveTransfer.controller.close();
+            delete receiveTransfer.controller;
+            delete receiveTransfer.dataChain;
+            delete receiveTransfer.response;
+            receiveTransfer.status = "Failed";
+            receiveTransfer.timestamp = Date.now();
           }
         } else {
           receiveContent(event.data);
         }
       };
 
-      setInterval(() => {
+      const refreshTransfersList = () => {
         transfersContainer.innerHTML = transfers
           .map((transfer) => {
             const progressPercentage = parseInt((transfer.progress * 1000) / transfer.size) / 10;
@@ -308,8 +327,9 @@
             return `<pre>${JSON.stringify(transferDetails, null, 2)}<pre>`;
           })
           .join("");
-      }, 1000);
+      };
 
+      setInterval(refreshTransfersList, 1000);
       document.querySelector("#files-to-upload").addEventListener("change", uploadMeta);
     </script>
   </body>

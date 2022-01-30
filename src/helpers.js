@@ -15,6 +15,25 @@ const removeFilesOfAClient = (clientId) => {
 const removeTransfersOfClient = (clientId, useDest) => {
   Object.values(transfers).forEach((transfer) => {
     if (transfer.sourceClientId === clientId || (useDest && transfer.destClientId === clientId)) {
+      // TODO: move this if-else out of helper
+      if (transfer.sourceClientId === clientId) {
+        this.getClientWebsocket(transfer.destClientId).send(
+          JSON.stringify({
+            action: "RECEIVE_FAILED",
+            payload: useDest ? "CLIENT_DISCONNECTED" : "CLIENT_CLEARED_FILES",
+          }),
+          { binary: false }
+        );
+      } else {
+        this.getClientWebsocket(transfer.sourceClientId).send(
+          JSON.stringify({
+            action: "SEND_FAILED",
+            payload: useDest ? "CLIENT_DISCONNECTED" : "CLIENT_CLEARED_FILES",
+          }),
+          { binary: false }
+        );
+      }
+
       delete transfers[transfer.transferId];
     }
   });
@@ -60,6 +79,9 @@ exports.addTransferRequest = (destClientId, source) => {
 
 exports.processData = (sourceClientId, data) => {
   const [transfer] = Object.values(transfers).filter((transfer) => transfer.sourceClientId === sourceClientId);
+  if (!transfer) {
+    throw new Error("TRANSFER_UNAVAILABLE");
+  }
   const destClient = clients[transfer.destClientId];
   return [destClient.webSocket, data];
 };
@@ -74,6 +96,8 @@ exports.doOnAllClients = (cb) => Object.values(clients).map(cb);
 
 exports.filesListForClient = (clientId) =>
   JSON.stringify({ action: "LIST", payload: Object.values(files).filter((file) => file.clientId !== clientId) });
+
+exports.getClientWebsocket = (clientId) => clients[clientId].webSocket;
 
 exports.getNextClientId = () => {
   lastUsedClientId += 1;
