@@ -59,6 +59,8 @@
       const ws = new WebSocket(location.origin.replace(/^http/, "ws"));
       const transfersContainer = document.querySelector("#file-transfers");
       const transfers = [];
+      let currentReceiveTransfer = -1;
+      let currentSendTransfer = -1;
 
       const getSize = (sizeInBytes) => {
         if (sizeInBytes < 1024) return `${sizeInBytes} B`;
@@ -121,6 +123,7 @@
           if (!done) {
             reader.read().then(readHandler, readErrorhandler);
           } else {
+            // TODO: cleanup receiveTransfer
             ws.send(JSON.stringify({ action: "END", payload: { transferId } }));
           }
         };
@@ -132,6 +135,7 @@
         const filesToUpload = document.querySelector("#files-to-upload").files;
         for (let i = 0; i < filesToUpload.length; i++) {
           if (filesToUpload[i].name === filename) {
+            currentSendTransfer = transfers.length;
             transfers.push({ type: "SEND", transferId, name: filename });
             uploadContent(filesToUpload[i], transferId);
             break;
@@ -159,7 +163,7 @@
       };
 
       const receiveContent = (data) => {
-        const receiveTransfer = transfers.filter((transfer) => transfer.type === "RECEIVE")[0];
+        const receiveTransfer = transfers[currentReceiveTransfer];
         if (receiveTransfer) {
           if (!receiveTransfer.response) {
             receiveTransfer.response = new Response(
@@ -191,13 +195,15 @@
           } else if (parsedData.action === "REQUEST") {
             pickAndUploadFile(parsedData.payload);
           } else if (parsedData.action === "START") {
-            transfers.push({ type: "RECEIVE", ...parsedData.payload });
+            currentReceiveTransfer = transfers.length;
+            transfers.push({ type: "RECEIVE", status: "Queued", ...parsedData.payload });
           } else if (parsedData.action === "END") {
-            const receiveTransfer = transfers.filter((transfer) => transfer.type === "RECEIVE")[0];
+            const receiveTransfer = transfers[currentReceiveTransfer];
             if (receiveTransfer && receiveTransfer.controller) {
               receiveTransfer.dataChain.then(() => {
                 receiveTransfer.controller.close();
                 receiveTransfer.response.blob().then((binaryData) => {
+                  receiveTransfer.status = "Complete";
                   const blobUrl = window.URL.createObjectURL(binaryData);
                   const link = document.createElement("a");
                   link.href = blobUrl;
@@ -206,6 +212,9 @@
                   link.click();
                   link.parentNode.removeChild(link);
                   window.URL.revokeObjectURL(blobUrl);
+                  delete receiveTransfer.controller;
+                  delete receiveTransfer.dataChain;
+                  delete receiveTransfer.response;
                 });
                 // TODO: cleanup receiveTransfer
               });
