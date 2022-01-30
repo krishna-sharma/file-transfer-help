@@ -89,6 +89,7 @@ exports.processData = (sourceClientId, data) => {
 exports.endofData = (sourceClientId) => {
   const [transfer] = Object.values(transfers).filter((transfer) => transfer.sourceClientId === sourceClientId);
   const destClient = clients[transfer.destClientId];
+  delete transfers[transfer.transferId];
   return [destClient.webSocket, JSON.stringify({ action: "END", payload: transfer })];
 };
 
