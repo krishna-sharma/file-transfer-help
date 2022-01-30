@@ -120,7 +120,7 @@
       const uploadContent = (fileObj, transferId) => {
         const reader = fileObj.stream().getReader();
         const readErrorhandler = (error) => console.log(error);
-        const readHandler = ({ value, done }) => {
+        const readHandler = async ({ value, done }) => {
           const sendTransfer = transfers[currentSendTransfer];
           if (sendTransfer.status === "Queued") {
             sendTransfer.status = "Progressing";
@@ -129,6 +129,27 @@
           if (value) {
             const len = value.byteLength;
             const increment = 1024 * 7;
+            const waitOnBuffer = new Promise((resolve, reject) => {
+              let rejected = false;
+              const rejectWaitLoop = () => {
+                rejected = true;
+                reject();
+              };
+              const checkBuffer = () =>
+                setTimeout(() => {
+                  if (ws.bufferedAmount < increment) {
+                    ws.onerror = undefined;
+                    ws.onclose = undefined;
+                    resolve(ws.bufferedAmount);
+                  } else if (!rejected) {
+                    checkBuffer();
+                  }
+                }, 1);
+              ws.onerror = rejectWaitLoop;
+              ws.onclose = rejectWaitLoop;
+              checkBuffer();
+            });
+            await waitOnBuffer;
             for (let i = 0; i < value.byteLength; i += increment) {
               const dataChunk = value.subarray(i, i + increment);
               sendTransfer.progress += dataChunk.byteLength;
