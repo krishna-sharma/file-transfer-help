@@ -69,35 +69,44 @@
         else return `${Math.round((sizeInBytes / (1024 * 1024 * 1024)) * 10) / 10} GB`;
       };
 
+      const formatDate = (dateObj) =>
+        new Date(dateObj.getTime() - dateObj.getTimezoneOffset() * 60000).toISOString().replace("T", " ").slice(0, -5);
+
+      const getDuration = (timeDiff) => {
+        const seconds = parseInt((timeDiff % 60000) / 1000);
+        if (timeDiff > 3600000) return `${parseInt(timeDiff / 3600000)}h ${parseInt((timeDiff % 3600000) / 60000)}m`;
+        else if (timeDiff > 60000) return `${parseInt(timeDiff / 60000)}m ${parseInt((timeDiff % 60000) / 1000)}s`;
+        else if (timeDiff > 1000) return `${parseInt(timeDiff / 1000)}s`;
+        else return `~1s`;
+      };
+
       const showFileList = (availableFiles) => {
         const tableRows = availableFiles.map((availableFile) => {
-          let modifiedDate = new Date(availableFile.lastModified);
-          modifiedDate = new Date(modifiedDate.getTime() - modifiedDate.getTimezoneOffset() * 60000);
-          modifiedDate = modifiedDate.toISOString().replace("T", " ").slice(0, -5);
+          const modifiedDate = formatDate(new Date(availableFile.lastModified));
           return `
-              <tr class="${availableFile.clientId} ${availableFile.fileId}">
-                <td>${availableFile.name}</td>
-                <td class="center">${getSize(availableFile.size)}</td>
-                <td class="center">${modifiedDate}</td>
-                <td class="center">${availableFile.mimeType}</td>
-              </tr>
-            `;
+            <tr class="${availableFile.clientId} ${availableFile.fileId}">
+              <td>${availableFile.name}</td>
+              <td class="center">${getSize(availableFile.size)}</td>
+              <td class="center">${modifiedDate}</td>
+              <td class="center">${availableFile.mimeType}</td>
+            </tr>
+          `;
         });
         el.innerHTML = `
-            <table class="file">
-              <thead>
-                <tr>
-                  <th>Filename</th>
-                  <th>Size</th>
-                  <th>Last Modified</th>
-                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRows.join("")}
-              </tbody>
-            </table>
-          `;
+          <table class="file">
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>Last Modified</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows.join("")}
+            </tbody>
+          </table>
+        `;
         // TODO: remove transfers that are no longer available
         const filesAvailable = document.querySelectorAll("#files-to-download > table > tbody > tr");
         filesAvailable.forEach((fileRow) => {
@@ -112,18 +121,27 @@
         const reader = fileObj.stream().getReader();
         const readErrorhandler = (error) => console.log(error);
         const readHandler = ({ value, done }) => {
+          const sendTransfer = transfers[currentSendTransfer];
+          if (sendTransfer.status === "Queued") {
+            sendTransfer.status = "Progressing";
+          }
+
           if (value) {
             const len = value.byteLength;
             const increment = 1024 * 7;
             for (let i = 0; i < value.byteLength; i += increment) {
-              ws.send(value.subarray(i, i + increment));
+              const dataChunk = value.subarray(i, i + increment);
+              sendTransfer.progress += dataChunk.byteLength;
+              sendTransfer.timestamp = Date.now();
+              ws.send(dataChunk);
             }
           }
 
           if (!done) {
             reader.read().then(readHandler, readErrorhandler);
           } else {
-            // TODO: cleanup receiveTransfer
+            sendTransfer.status = "Complete";
+            sendTransfer.timestamp = Date.now();
             ws.send(JSON.stringify({ action: "END", payload: { transferId } }));
           }
         };
@@ -136,7 +154,18 @@
         for (let i = 0; i < filesToUpload.length; i++) {
           if (filesToUpload[i].name === filename) {
             currentSendTransfer = transfers.length;
-            transfers.push({ type: "SEND", transferId, name: filename });
+            transfers.push({
+              type: "SEND",
+              status: "Queued",
+              start: Date.now(),
+              timestamp: Date.now(),
+              progress: 0,
+              transferId,
+              name: filename,
+              size: filesToUpload[i].size,
+              mimeType: filesToUpload[i].type,
+              lastModified: filesToUpload[i].lastModified,
+            });
             uploadContent(filesToUpload[i], transferId);
             break;
           }
@@ -173,7 +202,8 @@
                 },
               })
             );
-            receiveTransfer.progress = 0;
+            receiveTransfer.status = "Progressing";
+            receiveTransfer.timestamp = Date.now();
             receiveTransfer.dataChain = Promise.resolve(true);
           }
 
@@ -181,6 +211,7 @@
             data.arrayBuffer().then((arrayBuffer) => {
               receiveTransfer.controller.enqueue(new Uint8Array(arrayBuffer));
               receiveTransfer.progress += data.size;
+              receiveTransfer.timestamp = Date.now();
               return true;
             })
           );
@@ -196,7 +227,14 @@
             pickAndUploadFile(parsedData.payload);
           } else if (parsedData.action === "START") {
             currentReceiveTransfer = transfers.length;
-            transfers.push({ type: "RECEIVE", status: "Queued", ...parsedData.payload });
+            transfers.push({
+              type: "RECEIVE",
+              status: "Queued",
+              start: Date.now(),
+              timestamp: Date.now(),
+              progress: 0,
+              ...parsedData.payload,
+            });
           } else if (parsedData.action === "END") {
             const receiveTransfer = transfers[currentReceiveTransfer];
             if (receiveTransfer && receiveTransfer.controller) {
@@ -204,6 +242,7 @@
                 receiveTransfer.controller.close();
                 receiveTransfer.response.blob().then((binaryData) => {
                   receiveTransfer.status = "Complete";
+                  receiveTransfer.timestamp = Date.now();
                   const blobUrl = window.URL.createObjectURL(binaryData);
                   const link = document.createElement("a");
                   link.href = blobUrl;
@@ -216,7 +255,6 @@
                   delete receiveTransfer.dataChain;
                   delete receiveTransfer.response;
                 });
-                // TODO: cleanup receiveTransfer
               });
             }
           }
@@ -228,10 +266,16 @@
       setInterval(() => {
         transfersContainer.innerHTML = transfers
           .map((transfer) => {
+            const progressPercentage = parseInt((transfer.progress * 1000) / transfer.size) / 10;
+            const avgSpeed = getSize((transfer.progress * 1000) / (transfer.timestamp - transfer.start));
+            const duration = getDuration(transfer.timestamp - transfer.start);
             const transferDetails = {
               type: transfer.type,
               transferId: transfer.transferId,
               name: transfer.name,
+              status: transfer.status,
+              progress: `${getSize(transfer.progress)} ${progressPercentage}% @ ${avgSpeed}/s`,
+              duration: `${duration} as of ${formatDate(new Date(transfer.timestamp))}`,
             };
             return `<pre>${JSON.stringify(transferDetails, null, 2)}<pre>`;
           })
