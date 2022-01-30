@@ -55,6 +55,7 @@
     </form>
 
     <script>
+      const increment = 1024 * 30;
       const el = document.getElementById("files-to-download");
       const ws = new WebSocket(location.origin.replace(/^http/, "ws"));
       const transfersContainer = document.querySelector("#file-transfers");
@@ -117,6 +118,32 @@
         });
       };
 
+      const waitOnBuffer = (maxBuffer) =>
+        new Promise((resolve, reject) => {
+          let rejected = false;
+          const rejectWaitLoop = () => {
+            rejected = true;
+            reject();
+          };
+          const checkBuffer = () =>
+            setTimeout(() => {
+              if (ws.bufferedAmount > maxBuffer) {
+                checkBuffer();
+              } else if (!rejected) {
+                ws.onerror = undefined;
+                ws.onclose = undefined;
+                resolve(ws.bufferedAmount);
+              }
+            }, 1);
+          ws.onerror = rejectWaitLoop;
+          ws.onclose = rejectWaitLoop;
+          checkBuffer();
+        });
+
+      setInterval(() => {
+        console.log("ws.bufferedAmount is:", ws.bufferedAmount);
+      }, 1000);
+
       const uploadContent = (fileObj, transferId) => {
         const reader = fileObj.stream().getReader();
         const readErrorhandler = (error) => console.log(error);
@@ -128,29 +155,8 @@
 
           if (value) {
             const len = value.byteLength;
-            const increment = 1024 * 7;
-            const waitOnBuffer = new Promise((resolve, reject) => {
-              let rejected = false;
-              const rejectWaitLoop = () => {
-                rejected = true;
-                reject();
-              };
-              const checkBuffer = () =>
-                setTimeout(() => {
-                  if (ws.bufferedAmount < increment) {
-                    ws.onerror = undefined;
-                    ws.onclose = undefined;
-                    resolve(ws.bufferedAmount);
-                  } else if (!rejected) {
-                    checkBuffer();
-                  }
-                }, 1);
-              ws.onerror = rejectWaitLoop;
-              ws.onclose = rejectWaitLoop;
-              checkBuffer();
-            });
-            await waitOnBuffer;
             for (let i = 0; i < value.byteLength; i += increment) {
+              await waitOnBuffer(increment);
               const dataChunk = value.subarray(i, i + increment);
               sendTransfer.progress += dataChunk.byteLength;
               sendTransfer.timestamp = Date.now();
@@ -161,6 +167,7 @@
           if (!done) {
             reader.read().then(readHandler, readErrorhandler);
           } else {
+            await waitOnBuffer(0);
             sendTransfer.status = "Complete";
             sendTransfer.timestamp = Date.now();
             ws.send(JSON.stringify({ action: "END", payload: { transferId } }));
