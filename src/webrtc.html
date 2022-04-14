@@ -69,6 +69,7 @@
         const ldc = lc.con.createDataChannel(dataChannelLabel);
         ldc.onopen = (event) => {
           console.log("MARKER 2", "ldc.onopen");
+          console.log("MARKER 2", "saying", "Hi you!");
           ldc.send("Hi you!");
         };
         ldc.onmessage = (event) => {
@@ -95,6 +96,7 @@
             };
             rdc.onmessage = (event) => {
               console.log("MARKER 6", "rdc.onmessage", event.data);
+              console.log("MARKER 6", "replying", "Well hello there!");
               rdc.send("Well hello there!");
             };
             rdc.onclose = (event) => {
