@@ -27,6 +27,19 @@ router.post("/webrtc/peer/add", function (req, res) {
   res.status(200).json({ peer: newPeer });
 });
 
+router.post("/webrtc/peer/update", function (req, res) {
+  const peerId = req.body.id;
+  peers = peers.map((peer) =>
+    peer.id !== peerId
+      ? peer
+      : {
+          ...peer,
+          ...req.body,
+        }
+  );
+  res.status(200).json({ peer: peers.find((peer) => peer.id === peerId) });
+});
+
 router.get("/webrtc", (req, res) => {
   res.type(".html");
   res.status(200).send(webrtcContents);

@@ -76,12 +76,55 @@
           // ldc.close();
         };
         ldc.onclose = (event) => {
-          console.log("MARKER 7", "ldc.onclose");
+          console.log("MARKER 4", "ldc.onclose");
         };
         const o = await lc.con.createOffer();
         await lc.con.setLocalDescription(o);
         await lc.waitOnGather;
-        const peer = await post("/webrtc/peer/add", { name: "noname", offer: lc.desc });
+        const { peer: localPeer } = await post("/webrtc/peer/add", { name: "noname", offer: lc.desc });
+
+        const { peers } = await post("/webrtc/internals", { peers: true });
+        const remotePeer = peers.filter((peer) => localPeer.id !== peer.id).slice(-1)[0];
+        if (remotePeer) {
+          rc = initPeerConnection();
+
+          rc.con.ondatachannel = (event) => {
+            const rdc = event.channel;
+            rdc.onopen = (event) => {
+              console.log("MARKER 5", "rdc.onopen");
+            };
+            rdc.onmessage = (event) => {
+              console.log("MARKER 6", "rdc.onmessage", event.data);
+              rdc.send("Well hello there!");
+            };
+            rdc.onclose = (event) => {
+              console.log("MARKER 7", "rdc.onclose");
+            };
+            rc.channel = rdc;
+          };
+
+          await rc.con.setRemoteDescription(remotePeer.offer);
+          const a = await rc.con.createAnswer();
+          await rc.con.setLocalDescription(a);
+          await rc.waitOnGather;
+          await post("/webrtc/peer/update", {
+            ...localPeer,
+            answer: rc.desc,
+          });
+        } else {
+          const checkIfAnswerSet = async () => {
+            const { peers } = await post("/webrtc/internals", { peers: true });
+            const remotePeer = peers.filter((peer) => localPeer.id !== peer.id).slice(-1)[0];
+            return remotePeer && remotePeer.answer ? remotePeer : undefined;
+          };
+          let remotePeer = await checkIfAnswerSet();
+          while (!remotePeer) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            remotePeer = await checkIfAnswerSet();
+          }
+          await lc.con.setRemoteDescription(remotePeer.answer);
+          await rc.waitOnGather;
+        }
       };
 
       const doStartCall = async () => {
@@ -97,59 +140,35 @@
         //   lc.con.addTrack(track, ldm);
         // });
         // document.getElementById("myScreenShare").srcObject = ldm;
-
-        document.getElementById("remoteDesc").addEventListener("input", doStartCallStep2);
-        document.getElementById("startCallStep1").classList.remove("hide");
-      };
-
-      const doJoinCall = async () => {
-        document.getElementById("offerDesc").addEventListener("input", doJoinCallStep2);
-        document.getElementById("joinCallStep1").classList.remove("hide");
       };
 
       const doJoinCallStep2 = async () => {
-        const offerDesc = JSON.parse(atob(document.getElementById("offerDesc").value.trim()));
-        rc = initPeerConnection("answerDesc");
-        const rdm = new MediaStream();
-
-        rc.con.ondatachannel = (event) => {
-          const rdc = event.channel;
-          rdc.onopen = (event) => {
-            console.log("MARKER 6", "rdc.onopen");
-          };
-          rdc.onmessage = (event) => {
-            console.log("MARKER 7", "rdc.onmessage", event.data);
-            rdc.send("Well hello there!");
-          };
-          rdc.onclose = (event) => {
-            console.log("MARKER 7", "rdc.onclose");
-          };
-          rc.channel = rdc;
-        };
-
-        rc.con.ontrack = (event) => {
-          event.streams[0].getTracks().forEach((track) => {
-            rdm.addTrack(track);
-          });
-          document.getElementById("joinCallStep3").classList.remove("hide");
-        };
-        document.getElementById("remoteScreenShare").srcObject = rdm;
-
-        await rc.con.setRemoteDescription(offerDesc);
-        const a = await rc.con.createAnswer();
-        await rc.con.setLocalDescription(a);
-        document.getElementById("joinCallStep2").classList.remove("hide");
-      };
-
-      const doStartCallStep2 = async () => {
-        const offerDesc = JSON.parse(atob(document.getElementById("remoteDesc").value.trim()));
-        await lc.con.setRemoteDescription(offerDesc);
+        // const rdm = new MediaStream();
+        // rc.con.ondatachannel = (event) => {
+        //   const rdc = event.channel;
+        //   rdc.onopen = (event) => {
+        //     console.log("MARKER 6", "rdc.onopen");
+        //   };
+        //   rdc.onmessage = (event) => {
+        //     console.log("MARKER 7", "rdc.onmessage", event.data);
+        //     rdc.send("Well hello there!");
+        //   };
+        //   rdc.onclose = (event) => {
+        //     console.log("MARKER 7", "rdc.onclose");
+        //   };
+        //   rc.channel = rdc;
+        // };
+        // rc.con.ontrack = (event) => {
+        //   event.streams[0].getTracks().forEach((track) => {
+        //     rdm.addTrack(track);
+        //   });
+        //   document.getElementById("joinCallStep3").classList.remove("hide");
+        // };
+        // document.getElementById("remoteScreenShare").srcObject = rdm;
       };
 
       const pageLoadHandler = async () => {
         try {
-          document.getElementById("startCall").addEventListener("click", doStartCall);
-          document.getElementById("joinCall").addEventListener("click", doJoinCall);
           document.getElementById("dumpPeers").onclick = async () => {
             await post("/webrtc/internals", { peers: true });
           };
@@ -166,25 +185,9 @@
   <body>
     <div>
       <button type="button" id="dumpPeers">Fetch Internals</button>
-      <button type="button" id="startCall">Start Call</button>
-      <button type="button" id="joinCall">Join Call</button>
     </div>
     <div id="startCallStep1" class="hide">
-      <label for="localDesc">Your Code</label>
-      <input type="text" id="localDesc" />
-      <br />
-      <label for="remoteDesc">Remote Answer Code</label>
-      <input type="text" id="remoteDesc" />
-      <br />
       <video id="myScreenShare" autoplay playsinline></video>
-    </div>
-    <div id="joinCallStep1" class="hide">
-      <label for="offerDesc">Remote Code</label>
-      <input type="text" id="offerDesc" />
-    </div>
-    <div id="joinCallStep2" class="hide">
-      <label for="answerDesc">Your Answer Code</label>
-      <input type="text" id="answerDesc" />
     </div>
     <div id="joinCallStep3" class="hide">
       <video id="remoteScreenShare" autoplay playsinline></video>
