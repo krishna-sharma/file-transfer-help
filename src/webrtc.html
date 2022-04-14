@@ -13,6 +13,27 @@
     <title>Sailfish</title>
 
     <script>
+      const post = (url, payload) => {
+        const abortCtrl = new AbortController();
+        const signal = abortCtrl.signal;
+        const timer = setTimeout(() => abortCtrl.abort(), TIMEOUT);
+
+        return fetch(url, {
+          signal,
+          mode: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+          body: JSON.stringify(payload),
+        })
+          .then(async (res) => {
+            clearTimeout(timer);
+            return res.text();
+          })
+          .then((text) => JSON.parse(text));
+      };
+
       const peerConnectOptions = {
         iceServers: [{ urls: "stun:stun1.l.google.com:19302" }, { urls: "stun:stun2.l.google.com:19302" }],
       };
@@ -138,6 +159,9 @@
         try {
           document.getElementById("startCall").addEventListener("click", doStartCall);
           document.getElementById("joinCall").addEventListener("click", doJoinCall);
+
+          await post("/webrtc/peer/add", { name: "first one" });
+          await post("/webrtc/internals", { peers: true });
         } catch (error) {
           console.log("MARKER !!!");
           console.error(error);
