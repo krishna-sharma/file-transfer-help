@@ -9,6 +9,7 @@ const webrtcContents = fs.readFileSync(path.join(__dirname, "webrtc.html"), "utf
 
 router.post("/webrtc/internals", function (req, res) {
   const internals = {};
+  console.log("MARKER 1", req.body);
   if (req.body.peers) internals.peers = peers;
   res.status(200).json(internals);
 });

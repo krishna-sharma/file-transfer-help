@@ -9,6 +9,7 @@ exports.startHTTPServer = () => {
   const indexContents = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
 
   const app = express();
+  app.use(express.json());
   app.use(webrtcRouter);
   app.get("/", (req, res) => {
     res.type(".html");
