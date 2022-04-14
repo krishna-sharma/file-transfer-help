@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <style>
+      .hide {
+        display: none;
+      }
+    </style>
+
+    <title>Sailfish</title>
+
+    <script>
+      const peerConnectOptions = {
+        iceServers: [{ urls: "stun:stun1.l.google.com:19302" }, { urls: "stun:stun2.l.google.com:19302" }],
+      };
+      const dataChannelLabel = "chat";
+      const dataChannelOptions = undefined;
+      const initialConnectionObj = { con: null, gathering: null, desc: null };
+      let lc = { ...initialConnectionObj };
+      let rc = { ...initialConnectionObj };
+
+      const initPeerConnection = (descField) => {
+        const peerConnection = { ...initialConnectionObj };
+        peerConnection.con = new RTCPeerConnection(peerConnectOptions);
+        peerConnection.con.onicecandidate = (event) => {
+          peerConnection.desc = JSON.stringify(peerConnection.con.localDescription);
+          if (descField) document.getElementById(descField).value = btoa(peerConnection.desc);
+        };
+        peerConnection.con.onicegatheringstatechange = (event) => {
+          peerConnection.gathering = event.target.iceGatheringState;
+          if (peerConnection.gathering === "complete") {
+            const senders = peerConnection.con.getSenders();
+            senders.forEach((sender) => {
+              if (sender.track && sender.track.kind === "video") {
+                console.log("MARKER 8", sender.getParameters().codecs);
+              } else {
+                console.log("MARKER 9", sender);
+              }
+            });
+          }
+        };
+        return peerConnection;
+      };
+
+      const doStartCall = async () => {
+        lc = initPeerConnection("localDesc");
+
+        // TODO: const dc = lc.createDataChannel(dataChannelLabel, dataChannelOptions);
+        const ldc = lc.con.createDataChannel(dataChannelLabel);
+        ldc.onopen = (event) => {
+          console.log("MARKER 2", "ldc.onopen");
+          ldc.send("Hi you!");
+        };
+        ldc.onmessage = (event) => {
+          console.log("MARKER 3", "ldc.onmessage", event.data);
+          // ldc.close();
+        };
+        ldc.onclose = (event) => {
+          console.log("MARKER 7", "ldc.onclose");
+        };
+
+        // await navigator.mediaDevices.getUserMedia({
+        //   audio: true,
+        // });
+        const ldm = await navigator.mediaDevices.getDisplayMedia({
+          cursor: "always",
+          displaySurface: "monitor",
+          logicalSurface: false,
+        });
+        ldm.getTracks().forEach((track) => {
+          lc.con.addTrack(track, ldm);
+        });
+        document.getElementById("myScreenShare").srcObject = ldm;
+
+        const o = await lc.con.createOffer();
+        await lc.con.setLocalDescription(o);
+
+        await new Promise((resolve, reject) => {
+          const checkStatus = () => {
+            if (lc.gathering === "complete") resolve();
+            else setTimeout(checkStatus, 100);
+          };
+          setTimeout(checkStatus, 100);
+        });
+
+        document.getElementById("remoteDesc").addEventListener("input", doStartCallStep2);
+        document.getElementById("startCallStep1").classList.remove("hide");
+      };
+
+      const doJoinCall = async () => {
+        document.getElementById("offerDesc").addEventListener("input", doJoinCallStep2);
+        document.getElementById("joinCallStep1").classList.remove("hide");
+      };
+
+      const doJoinCallStep2 = async () => {
+        const offerDesc = JSON.parse(atob(document.getElementById("offerDesc").value.trim()));
+        rc = initPeerConnection("answerDesc");
+        const rdm = new MediaStream();
+
+        rc.con.ondatachannel = (event) => {
+          const rdc = event.channel;
+          rdc.onopen = (event) => {
+            console.log("MARKER 6", "rdc.onopen");
+          };
+          rdc.onmessage = (event) => {
+            console.log("MARKER 7", "rdc.onmessage", event.data);
+            rdc.send("Well hello there!");
+          };
+          rdc.onclose = (event) => {
+            console.log("MARKER 7", "rdc.onclose");
+          };
+          rc.channel = rdc;
+        };
+
+        rc.con.ontrack = (event) => {
+          event.streams[0].getTracks().forEach((track) => {
+            rdm.addTrack(track);
+          });
+          document.getElementById("joinCallStep3").classList.remove("hide");
+        };
+        document.getElementById("remoteScreenShare").srcObject = rdm;
+
+        await rc.con.setRemoteDescription(offerDesc);
+        const a = await rc.con.createAnswer();
+        await rc.con.setLocalDescription(a);
+        document.getElementById("joinCallStep2").classList.remove("hide");
+      };
+
+      const doStartCallStep2 = async () => {
+        const offerDesc = JSON.parse(atob(document.getElementById("remoteDesc").value.trim()));
+        await lc.con.setRemoteDescription(offerDesc);
+      };
+
+      const pageLoadHandler = async () => {
+        try {
+          document.getElementById("startCall").addEventListener("click", doStartCall);
+          document.getElementById("joinCall").addEventListener("click", doJoinCall);
+        } catch (error) {
+          console.log("MARKER !!!");
+          console.error(error);
+        }
+      };
+
+      window.addEventListener("load", pageLoadHandler);
+    </script>
+  </head>
+  <body>
+    <div>
+      <button type="button" id="startCall">Start Call</button>
+      <button type="button" id="joinCall">Join Call</button>
+    </div>
+    <div id="startCallStep1" class="hide">
+      <label for="localDesc">Your Code</label>
+      <input type="text" id="localDesc" />
+      <br />
+      <label for="remoteDesc">Remote Answer Code</label>
+      <input type="text" id="remoteDesc" />
+      <br />
+      <video id="myScreenShare" autoplay playsinline></video>
+    </div>
+    <div id="joinCallStep1" class="hide">
+      <label for="offerDesc">Remote Code</label>
+      <input type="text" id="offerDesc" />
+    </div>
+    <div id="joinCallStep2" class="hide">
+      <label for="answerDesc">Your Answer Code</label>
+      <input type="text" id="answerDesc" />
+    </div>
+    <div id="joinCallStep3" class="hide">
+      <video id="remoteScreenShare" autoplay playsinline></video>
+    </div>
+  </body>
+</html>
