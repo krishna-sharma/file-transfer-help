@@ -37,40 +37,34 @@
       };
 
       const peerConnectOptions = {
-        iceServers: [{ urls: "stun:stun1.l.google.com:19302" }, { urls: "stun:stun2.l.google.com:19302" }],
+        iceServers: [
+          { urls: "stun:stun1.l.google.com:19302" },
+          // { urls: "stun:stun.stunprotocol.org:3478" },
+        ],
       };
       const dataChannelLabel = "chat";
       const dataChannelOptions = undefined;
-      const initialConnectionObj = { con: null, gathering: null, desc: null };
+      const initialConnectionObj = { con: null, gathering: null, waitOnGather: null, desc: null };
       let lc = { ...initialConnectionObj };
       let rc = { ...initialConnectionObj };
 
-      const initPeerConnection = (descField) => {
+      const initPeerConnection = () => {
         const peerConnection = { ...initialConnectionObj };
         peerConnection.con = new RTCPeerConnection(peerConnectOptions);
         peerConnection.con.onicecandidate = (event) => {
-          peerConnection.desc = JSON.stringify(peerConnection.con.localDescription);
-          if (descField) document.getElementById(descField).value = btoa(peerConnection.desc);
+          peerConnection.desc = peerConnection.con.localDescription;
         };
-        peerConnection.con.onicegatheringstatechange = (event) => {
-          peerConnection.gathering = event.target.iceGatheringState;
-          if (peerConnection.gathering === "complete") {
-            const senders = peerConnection.con.getSenders();
-            senders.forEach((sender) => {
-              if (sender.track && sender.track.kind === "video") {
-                console.log("MARKER 8", sender.getParameters().codecs);
-              } else {
-                console.log("MARKER 9", sender);
-              }
-            });
-          }
-        };
+        peerConnection.waitOnGather = new Promise((resolve, reject) => {
+          peerConnection.con.onicegatheringstatechange = (event) => {
+            peerConnection.gathering = event.target.iceGatheringState;
+            if (peerConnection.gathering === "complete") resolve(peerConnection);
+          };
+        });
         return peerConnection;
       };
 
-      const doStartCall = async () => {
-        lc = initPeerConnection("localDesc");
-
+      const registerPeer = async () => {
+        lc = initPeerConnection();
         // TODO: const dc = lc.createDataChannel(dataChannelLabel, dataChannelOptions);
         const ldc = lc.con.createDataChannel(dataChannelLabel);
         ldc.onopen = (event) => {
@@ -84,30 +78,25 @@
         ldc.onclose = (event) => {
           console.log("MARKER 7", "ldc.onclose");
         };
+        const o = await lc.con.createOffer();
+        await lc.con.setLocalDescription(o);
+        await lc.waitOnGather;
+        const peer = await post("/webrtc/peer/add", { name: "noname", offer: lc.desc });
+      };
 
+      const doStartCall = async () => {
         // await navigator.mediaDevices.getUserMedia({
         //   audio: true,
         // });
-        const ldm = await navigator.mediaDevices.getDisplayMedia({
-          cursor: "always",
-          displaySurface: "monitor",
-          logicalSurface: false,
-        });
-        ldm.getTracks().forEach((track) => {
-          lc.con.addTrack(track, ldm);
-        });
-        document.getElementById("myScreenShare").srcObject = ldm;
-
-        const o = await lc.con.createOffer();
-        await lc.con.setLocalDescription(o);
-
-        await new Promise((resolve, reject) => {
-          const checkStatus = () => {
-            if (lc.gathering === "complete") resolve();
-            else setTimeout(checkStatus, 100);
-          };
-          setTimeout(checkStatus, 100);
-        });
+        // const ldm = await navigator.mediaDevices.getDisplayMedia({
+        //   cursor: "always",
+        //   displaySurface: "monitor",
+        //   logicalSurface: false,
+        // });
+        // ldm.getTracks().forEach((track) => {
+        //   lc.con.addTrack(track, ldm);
+        // });
+        // document.getElementById("myScreenShare").srcObject = ldm;
 
         document.getElementById("remoteDesc").addEventListener("input", doStartCallStep2);
         document.getElementById("startCallStep1").classList.remove("hide");
@@ -161,9 +150,10 @@
         try {
           document.getElementById("startCall").addEventListener("click", doStartCall);
           document.getElementById("joinCall").addEventListener("click", doJoinCall);
-
-          await post("/webrtc/peer/add", { name: "first one" });
-          await post("/webrtc/internals", { peers: true });
+          document.getElementById("dumpPeers").onclick = async () => {
+            await post("/webrtc/internals", { peers: true });
+          };
+          registerPeer();
         } catch (error) {
           console.log("MARKER !!!");
           console.error(error);
@@ -175,6 +165,7 @@
   </head>
   <body>
     <div>
+      <button type="button" id="dumpPeers">Fetch Internals</button>
       <button type="button" id="startCall">Start Call</button>
       <button type="button" id="joinCall">Join Call</button>
     </div>

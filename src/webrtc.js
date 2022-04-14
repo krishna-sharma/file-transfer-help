@@ -3,23 +3,28 @@ const fs = require("fs");
 const path = require("path");
 const router = express.Router();
 
-const peers = [];
+let peers = [];
 
 const webrtcContents = fs.readFileSync(path.join(__dirname, "webrtc.html"), "utf8");
 
 router.post("/webrtc/internals", function (req, res) {
   const internals = {};
-  console.log("MARKER 1", req.body);
   if (req.body.peers) internals.peers = peers;
   res.status(200).json(internals);
 });
 
+router.get("/webrtc/peers/purge", function (req, res) {
+  peers = [];
+  res.status(200).json({ status: "success" });
+});
+
 router.post("/webrtc/peer/add", function (req, res) {
-  peers.push({
+  const newPeer = {
     id: peers.length,
     ...req.body,
-  });
-  res.status(200).json({ peers: peers });
+  };
+  peers.push(newPeer);
+  res.status(200).json({ peer: newPeer });
 });
 
 router.get("/webrtc", (req, res) => {
